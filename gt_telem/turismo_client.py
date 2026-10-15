@@ -26,7 +26,8 @@ class TurismoClient:
             - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
             - ps_ip (str): PlayStation IP address. If None, it will be discovered.
             - heartbeat_type (str): Heartbeat message type to use. Options: "A" (standard),
-                                  "B" (extended with motion data), "~" (extended with filtered data).
+                                  "B" (extended with motion data), "~" (motion data plus filtered
+                                  inputs and energy recovery).
                                   Default is "A". Note: Only one type can be active per session.
             - max_callback_workers (int): Maximum number of threads for callback execution. Default is 10.
         """
@@ -412,9 +413,18 @@ class TurismoClient:
             'car_code': sr.read_int32(),
         }
 
-        # Parse additional fields based on heartbeat type
-        if self.heartbeat_type == "B":
-            # Heartbeat "B" adds 5 additional floats for motion data
+        # Parse additional fields based on heartbeat type.
+        #
+        # Datagram sizes measured from a PS5 running GT7 (header included):
+        # "A" = 296 bytes, "B" = 316 bytes, "~" = 344 bytes. "B" appends the
+        # 5-float motion block at offset 0x128, right after the "A" payload.
+        # "~" appends that same motion block at 0x128 and then its own 28-byte
+        # block at 0x13C, so a "~" packet is a superset of "B" and the motion
+        # block must be read before the "~" fields. (PDTools' SimulatorPacket
+        # reads it the same way: motion block when the packet is at least 0x13C
+        # bytes long, extended block when it is at least 0x158.)
+        if self.heartbeat_type in ("B", "~"):
+            # Motion data: 5 floats at 0x128-0x13B
             telemetry_data.update({
                 'wheel_rotation_radians': sr.read_single(),
                 'filler_float_fb': sr.read_single(),
@@ -422,9 +432,8 @@ class TurismoClient:
                 'heave': sr.read_single(),
                 'surge': sr.read_single(),
             })
-        elif self.heartbeat_type == "~":
-            # Heartbeat "~" adds different extended data
-            # Based on the GitHub issue, it includes filtered throttle/brake and energy recovery
+        if self.heartbeat_type == "~":
+            # Filtered inputs and energy recovery: 28 bytes at 0x13C-0x157
             telemetry_data.update({
                 'throttle_filtered': sr.read_byte(),
                 'brake_filtered': sr.read_byte(),

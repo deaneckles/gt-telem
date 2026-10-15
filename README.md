@@ -167,7 +167,7 @@ tc_standard = TurismoClient(heartbeat_type="A")
 # Motion data heartbeat - 316 bytes with additional motion fields
 tc_motion = TurismoClient(heartbeat_type="B")
 
-# Extended data heartbeat - includes filtered inputs and energy recovery
+# Extended data heartbeat - 344 bytes: the motion fields plus filtered inputs and energy recovery
 tc_extended = TurismoClient(heartbeat_type="~")
 ```
 
@@ -193,7 +193,7 @@ if telemetry and telemetry.motion_data:
 ```
 
 ### Heartbeat Type "~" (Extended Data)
-Provides additional fields including:
+A superset of "B": the packet carries the 5 motion fields above (so `motion_data` is populated too), followed by:
 - `throttle_filtered` - Filtered throttle input
 - `brake_filtered` - Filtered brake input
 - `energy_recovery` - Energy recovery value
